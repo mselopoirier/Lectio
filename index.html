@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lectio</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f4f0; --surface: #fff; --border: #e8e4dc;
+    --text: #1a1612; --muted: #7a7068; --accent: #7C2D3E;
+    --accent2: #2D5016; --tag-bg: #f0ece4; --sidebar-w: 220px;
+  }
+  [data-theme="dark"] {
+    --bg: #0f0e0c; --surface: #1a1815; --border: #2a2620;
+    --text: #f0ece4; --muted: #9a9088; --tag-bg: #2a2620;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
+
+  /* Sidebar */
+  #sidebar {
+    width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 24px 0; position: fixed; top: 0; left: 0;
+    height: 100vh; z-index: 100; transition: transform 0.25s;
+  }
+  #sidebar.hidden { transform: translateX(-100%); }
+  .logo { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 600; color: var(--accent); padding: 0 20px 24px; border-bottom: 1px solid var(--border); }
+  .logo span { font-size: 13px; font-weight: 400; color: var(--muted); display: block; font-family: 'Inter', sans-serif; }
+  nav { flex: 1; padding: 16px 0; }
+  nav a { display: flex; align-items: center; gap: 10px; padding: 10px 20px; color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; border-radius: 0; transition: all 0.15s; cursor: pointer; }
+  nav a:hover { color: var(--text); background: var(--tag-bg); }
+  nav a.active { color: var(--accent); background: #fdf0f2; font-weight: 600; border-right: 3px solid var(--accent); }
+  [data-theme="dark"] nav a.active { background: #2a1518; }
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+  .sidebar-bottom { padding: 16px 20px; border-top: 1px solid var(--border); }
+  .theme-btn { background: none; border: 1px solid var(--border); color: var(--muted); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%; }
+  .theme-btn:hover { color: var(--text); border-color: var(--text); }
+
+  /* Overlay */
+  #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 99; }
+
+  /* Main */
+  #main { margin-left: var(--sidebar-w); flex: 1; min-height: 100vh; }
+  .topbar { display: none; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 50; }
+  .topbar-logo { font-family: 'Cormorant Garamond', serif; font-size: 20px; font-weight: 600; color: var(--accent); }
+  .burger { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text); padding: 4px; }
+  .page { display: none; padding: 32px 40px; max-width: 960px; }
+  .page.active { display: block; }
+  h1 { font-family: 'Cormorant Garamond', serif; font-size: 32px; font-weight: 600; margin-bottom: 8px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 14px; position: relative; }
+  .card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .card-title { font-family: 'Cormorant Garamond', serif; font-size: 20px; font-weight: 600; line-height: 1.4; flex: 1; }
+  .card-meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .btn-icon { background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px 6px; border-radius: 6px; color: var(--muted); transition: all 0.15s; }
+  .btn-icon:hover { background: var(--tag-bg); color: var(--text); }
+  .btn-icon.fav { color: #e83e5a; }
+  .note { margin-top: 10px; font-size: 13px; color: var(--muted); font-style: italic; border-left: 2px solid var(--border); padding-left: 10px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .tag { background: var(--tag-bg); color: var(--muted); font-size: 11px; padding: 3px 8px; border-radius: 20px; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-ghost { background: none; border: 1px solid var(--border); color: var(--text); }
+  .btn-ghost:hover { background: var(--tag-bg); }
+  .btn-danger { background: #fee2e2; color: #b91c1c; border: none; }
+  .btn-danger:hover { background: #fecaca; }
+
+  /* Page header row */
+  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; flex-wrap: wrap; gap: 12px; }
+  .page-header h1 { margin-bottom: 0; }
+
+  /* Search + filter */
+  .search-row { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+  .search-input { flex: 1; min-width: 200px; padding: 9px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 14px; }
+  .search-input:focus { outline: none; border-color: var(--accent); }
+  select.filter { padding: 9px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 14px; cursor: pointer; }
+  select.filter:focus { outline: none; border-color: var(--accent); }
+
+  /* Modal */
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--surface); border-radius: 16px; padding: 28px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { font-family: 'Cormorant Garamond', serif; font-size: 24px; margin-bottom: 20px; }
+  .form-group { margin-bottom: 16px; }
+  label { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
+  input, textarea, select { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 80px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  /* Books grid */
+  .books-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+  .book-card { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); cursor: pointer; transition: transform 0.15s; }
+  .book-card:hover { transform: translateY(-2px); }
+  .book-cover { height: 120px; display: flex; align-items: flex-end; padding: 12px; }
+  .book-cover-title { font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 600; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.4); line-height: 1.3; }
+  .book-info { padding: 12px; background: var(--surface); }
+  .book-author { font-size: 12px; color: var(--muted); }
+  .book-cat { font-size: 11px; color: var(--muted); background: var(--tag-bg); padding: 2px 8px; border-radius: 20px; display: inline-block; margin-top: 6px; }
+  .book-actions { display: flex; gap: 6px; margin-top: 10px; }
+
+  /* Color picker */
+  .color-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .color-swatch { width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: transform 0.1s; }
+  .color-swatch:hover, .color-swatch.selected { transform: scale(1.15); border-color: var(--text); }
+
+  /* Favoris daily */
+  .daily-card { background: linear-gradient(135deg, var(--accent) 0%, #a0394f 100%); color: #fff; border-radius: 16px; padding: 28px; margin-bottom: 28px; }
+  .daily-label { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.7; margin-bottom: 12px; }
+  .daily-text { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-style: italic; line-height: 1.6; margin-bottom: 12px; }
+  .daily-meta { font-size: 13px; opacity: 0.8; }
+  .daily-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .btn-white { background: rgba(255,255,255,0.2); color: #fff; border: 1px solid rgba(255,255,255,0.4); }
+  .btn-white:hover { background: rgba(255,255,255,0.35); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 2px; background: var(--tag-bg); border-radius: 10px; padding: 4px; width: fit-content; margin-bottom: 24px; }
+  .tab { padding: 8px 18px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; color: var(--muted); transition: all 0.15s; border: none; background: none; }
+  .tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+  /* Vocab */
+  .alpha-group { margin-bottom: 24px; }
+  .alpha-letter { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 600; color: var(--accent); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .word-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 600; }
+  .etymology { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 4px; }
+  .definition { font-size: 14px; margin-top: 10px; line-height: 1.6; }
+  .example { margin-top: 8px; font-size: 13px; color: var(--muted); font-style: italic; border-left: 2px solid var(--border); padding-left: 10px; }
+
+  /* Settings */
+  .settings-section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+  .settings-section h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label { font-size: 14px; }
+  .setting-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .toggle { position: relative; width: 44px; height: 24px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; background: var(--border); border-radius: 24px; cursor: pointer; transition: 0.2s; }
+  .toggle-slider:before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: 0.2s; }
+  input:checked + .toggle-slider { background: var(--accent); }
+  input:checked + .toggle-slider:before { transform: translateX(20px); }
+  select.hour-select { width: auto; padding: 6px 10px; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-icon { font-size: 48px; margin-bottom: 16px; }
+  .empty p { font-size: 15px; }
+
+  /* Confirm delete */
+  .confirm-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; align-items: center; justify-content: center; }
+  .confirm-bg.open { display: flex; }
+  .confirm-box { background: var(--surface); border-radius: 12px; padding: 24px; max-width: 360px; width: 90%; }
+  .confirm-box h3 { font-size: 18px; margin-bottom: 8px; }
+  .confirm-box p { font-size: 14px; color: var(--muted); margin-bottom: 20px; }
+  .confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+  @media (max-width: 768px) {
+    #sidebar { transform: translateX(-100%); }
+    #sidebar.open { transform: translateX(0); }
+    #overlay { display: none; }
+    #overlay.open { display: block; }
+    #main { margin-left: 0; }
+    .topbar { display: flex; }
+    .page { padding: 20px 16px; }
+    .books-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  }
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <div class="logo">Lectio<span>Citations & Vocabulaire</span></div>
+  <nav>
+    <a class="active" data-page="quotes"><span class="nav-icon">💬</span>Citations</a>
+    <a data-page="vocab"><span class="nav-icon">📚</span>Vocabulaire</a>
+    <a data-page="books"><span class="nav-icon">📖</span>Mes livres</a>
+    <a data-page="favorites"><span class="nav-icon">❤️</span>Favoris</a>
+    <a data-page="settings"><span class="nav-icon">⚙️</span>Paramètres</a>
+  </nav>
+  <div class="sidebar-bottom">
+    <button class="theme-btn" onclick="toggleTheme()">🌙 Thème sombre</button>
+  </div>
+</div>
+<div id="overlay" onclick="closeSidebar()"></div>
+
+<div id="main">
+  <div class="topbar">
+    <button class="burger" onclick="openSidebar()">☰</button>
+    <div class="topbar-logo">Lectio</div>
+  </div>
+
+  <!-- CITATIONS -->
+  <div class="page active" id="page-quotes">
+    <div class="page-header">
+      <div><h1>Citations</h1><p class="subtitle" id="quotes-count">0 citation</p></div>
+      <button class="btn btn-primary" onclick="openQuoteModal()">＋ Ajouter</button>
+    </div>
+    <div class="search-row">
+      <input class="search-input" id="quotes-search" placeholder="Rechercher…" oninput="renderQuotes()">
+      <select class="filter" id="quotes-book-filter" onchange="renderQuotes()"><option value="">Tous les livres</option></select>
+    </div>
+    <div id="quotes-list"></div>
+  </div>
+
+  <!-- VOCABULAIRE -->
+  <div class="page" id="page-vocab">
+    <div class="page-header">
+      <div><h1>Vocabulaire</h1><p class="subtitle" id="vocab-count">0 définition</p></div>
+      <button class="btn btn-primary" onclick="openVocabModal()">＋ Ajouter</button>
+    </div>
+    <div class="search-row">
+      <input class="search-input" id="vocab-search" placeholder="Rechercher…" oninput="renderVocab()">
+    </div>
+    <div id="vocab-list"></div>
+  </div>
+
+  <!-- LIVRES -->
+  <div class="page" id="page-books">
+    <div class="page-header">
+      <div><h1>Mes livres</h1><p class="subtitle" id="books-count">0 livre</p></div>
+      <button class="btn btn-primary" onclick="openBookModal()">＋ Ajouter</button>
+    </div>
+    <div class="books-grid" id="books-grid"></div>
+  </div>
+
+  <!-- FAVORIS -->
+  <div class="page" id="page-favorites">
+    <h1>Favoris</h1>
+    <p class="subtitle" style="margin-bottom:24px">Ta sélection du cœur</p>
+    <div id="daily-banner"></div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchFavTab('quotes',this)">Citations</button>
+      <button class="tab" onclick="switchFavTab('vocab',this)">Vocabulaire</button>
+    </div>
+    <div id="fav-list"></div>
+  </div>
+
+  <!-- PARAMÈTRES -->
+  <div class="page" id="page-settings">
+    <h1>Paramètres</h1>
+    <p class="subtitle" style="margin-bottom:28px">Notifications & préférences</p>
+    <div class="settings-section">
+      <h3>🔔 Notifications quotidiennes</h3>
+      <div class="setting-row">
+        <div><div class="setting-label">Autoriser les notifications</div><div class="setting-desc" id="notif-status">Statut inconnu</div></div>
+        <button class="btn btn-ghost" id="notif-perm-btn" onclick="requestNotifPerm()">Activer</button>
+      </div>
+      <div class="setting-row">
+        <div><div class="setting-label">Notifications activées</div><div class="setting-desc">Reçois une citation ou définition chaque jour</div></div>
+        <label class="toggle"><input type="checkbox" id="notif-enabled" onchange="saveNotifSettings()"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="setting-row">
+        <div><div class="setting-label">Heure de notification</div></div>
+        <select class="hour-select filter" id="notif-hour" onchange="saveNotifSettings()"></select>
+      </div>
+      <div class="setting-row" style="border-bottom:none">
+        <div><div class="setting-label">Tester la notification</div><div class="setting-desc">Envoie une notification immédiatement</div></div>
+        <button class="btn btn-ghost" onclick="testNotif()">Tester</button>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3>🗂️ Données</h3>
+      <div class="setting-row">
+        <div><div class="setting-label">Exporter mes données</div><div class="setting-desc">Télécharge un fichier JSON avec tout ton contenu</div></div>
+        <button class="btn btn-ghost" onclick="exportData()">Exporter</button>
+      </div>
+      <div class="setting-row" style="border-bottom:none">
+        <div><div class="setting-label">Importer des données</div><div class="setting-desc">Restaure depuis un fichier JSON exporté</div></div>
+        <button class="btn btn-ghost" onclick="document.getElementById('import-file').click()">Importer</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<!-- Quote modal -->
+<div class="modal-bg" id="quote-modal">
+  <div class="modal">
+    <h2 id="quote-modal-title">Nouvelle citation</h2>
+    <input type="hidden" id="quote-id">
+    <div class="form-group"><label>Citation *</label><textarea id="q-text" placeholder="Le texte de la citation…" rows="4"></textarea></div>
+    <div class="form-group"><label>Livre</label><select id="q-book"><option value="">— Sans livre —</option></select></div>
+    <div class="form-group"><label>Page</label><input type="number" id="q-page" placeholder="ex: 47"></div>
+    <div class="form-group"><label>Tags (séparés par virgule)</label><input id="q-tags" placeholder="ex: sagesse, stoïcisme"></div>
+    <div class="form-group"><label>Note personnelle</label><textarea id="q-note" placeholder="Pourquoi cette citation me touche…" rows="2"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('quote-modal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveQuote()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Vocab modal -->
+<div class="modal-bg" id="vocab-modal">
+  <div class="modal">
+    <h2 id="vocab-modal-title">Nouveau mot</h2>
+    <input type="hidden" id="vocab-id">
+    <div class="form-group"><label>Mot *</label><input id="v-word" placeholder="ex: Ataraxie"></div>
+    <div class="form-group"><label>Définition *</label><textarea id="v-def" placeholder="La définition du mot…" rows="3"></textarea></div>
+    <div class="form-group"><label>Étymologie</label><input id="v-etym" placeholder="ex: Du grec ataraxia, absence de trouble"></div>
+    <div class="form-group"><label>Exemple d'utilisation</label><textarea id="v-example" placeholder="ex: Il atteignit l'ataraxie après des années…" rows="2"></textarea></div>
+    <div class="form-group"><label>Tags (séparés par virgule)</label><input id="v-tags" placeholder="ex: grec, philosophie"></div>
+    <div class="form-group"><label>Source (livre)</label><select id="v-book"><option value="">— Sans livre —</option></select></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('vocab-modal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveVocab()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Book modal -->
+<div class="modal-bg" id="book-modal">
+  <div class="modal">
+    <h2 id="book-modal-title">Nouveau livre</h2>
+    <input type="hidden" id="book-id">
+    <div class="form-group"><label>Titre *</label><input id="b-title" placeholder="Titre du livre"></div>
+    <div class="form-group"><label>Auteur</label><input id="b-author" placeholder="Nom de l'auteur"></div>
+    <div class="form-group"><label>Catégorie</label>
+      <select id="b-cat">
+        <option value="général">Général</option>
+        <option value="philosophie">Philosophie</option>
+        <option value="roman">Roman</option>
+        <option value="essai">Essai</option>
+        <option value="poésie">Poésie</option>
+        <option value="histoire">Histoire</option>
+        <option value="biographie">Biographie</option>
+        <option value="science">Science</option>
+        <option value="spiritualité">Spiritualité</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Couleur de couverture</label>
+      <div class="color-picker" id="color-picker"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('book-modal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveBook()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm delete -->
+<div class="confirm-bg" id="confirm-modal">
+  <div class="confirm-box">
+    <h3>Supprimer ?</h3>
+    <p>Cette action est irréversible.</p>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost" onclick="closeConfirm()">Annuler</button>
+      <button class="btn btn-danger" id="confirm-yes" onclick="confirmDelete()">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STORAGE ──────────────────────────────────────────────────────────────────
+const KEYS = { books:'lectio_books', quotes:'lectio_quotes', vocab:'lectio_vocab' };
+const COLORS = ['#7C2D3E','#2D5016','#1E3A5F','#8B6F1E','#4A1942','#2D3748','#7C4A1E','#4A5016'];
+
+function load(key) { try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; } }
+function save(key, data) { localStorage.setItem(key, JSON.stringify(data)); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+
+let books = load(KEYS.books);
+let quotes = load(KEYS.quotes);
+let vocab = load(KEYS.vocab);
+let currentFavTab = 'quotes';
+let deleteTarget = null;
+
+function persist() {
+  save(KEYS.books, books);
+  save(KEYS.quotes, quotes);
+  save(KEYS.vocab, vocab);
+}
+
+// ── NAVIGATION ───────────────────────────────────────────────────────────────
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelector(`nav a[data-page="${page}"]`).classList.add('active');
+  closeSidebar();
+  if (page === 'quotes') renderQuotes();
+  if (page === 'vocab') renderVocab();
+  if (page === 'books') renderBooks();
+  if (page === 'favorites') renderFavorites();
+  if (page === 'settings') initSettings();
+}
+document.querySelectorAll('nav a').forEach(a => a.addEventListener('click', () => navigate(a.dataset.page)));
+
+function openSidebar() { document.getElementById('sidebar').classList.add('open'); document.getElementById('overlay').classList.add('open'); }
+function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('overlay').classList.remove('open'); }
+
+// ── THEME ─────────────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', dark ? '' : 'dark');
+  document.querySelector('.theme-btn').textContent = dark ? '🌙 Thème sombre' : '☀️ Thème clair';
+  localStorage.setItem('lectio_theme', dark ? '' : 'dark');
+}
+(function() {
+  const t = localStorage.getItem('lectio_theme');
+  if (t === 'dark') { document.documentElement.setAttribute('data-theme','dark'); document.querySelector('.theme-btn').textContent = '☀️ Thème clair'; }
+})();
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function bookName(id) { const b = books.find(b => b.id === id); return b ? b.title : ''; }
+function parseTags(str) { return str.split(',').map(t => t.trim()).filter(Boolean); }
+function tagsHtml(tags) { return tags.map(t => `<span class="tag">${t}</span>`).join(''); }
+function fmtDate(ts) { return new Date(ts).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}); }
+
+function populateBookSelects() {
+  ['q-book','v-book'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— Sans livre —</option>' + books.map(b => `<option value="${b.id}">${b.title}</option>`).join('');
+    sel.value = cur;
+  });
+  const bf = document.getElementById('quotes-book-filter');
+  if (bf) bf.innerHTML = '<option value="">Tous les livres</option>' + books.map(b => `<option value="${b.id}">${b.title}</option>`).join('');
+}
+
+// ── QUOTES ────────────────────────────────────────────────────────────────────
+function renderQuotes() {
+  const search = document.getElementById('quotes-search').value.toLowerCase();
+  const bookF = document.getElementById('quotes-book-filter').value;
+  let list = quotes.filter(q => {
+    const match = q.text.toLowerCase().includes(search) || (q.note||'').toLowerCase().includes(search) || (q.tags||[]).some(t => t.toLowerCase().includes(search));
+    const bMatch = !bookF || q.book_id === bookF;
+    return match && bMatch;
+  });
+  list = [...list].sort((a,b) => b.created_at - a.created_at);
+  document.getElementById('quotes-count').textContent = `${quotes.length} citation${quotes.length !== 1 ? 's' : ''}`;
+  const el = document.getElementById('quotes-list');
+  if (!list.length) { el.innerHTML = `<div class="empty"><div class="empty-icon">💬</div><p>${quotes.length ? 'Aucun résultat' : 'Aucune citation encore — ajoutes-en une !'}</p></div>`; return; }
+  el.innerHTML = list.map(q => `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">"${q.text}"</div>
+        <div class="card-actions">
+          <button class="btn-icon ${q.is_favorite ? 'fav' : ''}" onclick="toggleFav('quotes','${q.id}')" title="Favori">♥</button>
+          <button class="btn-icon" onclick="openQuoteModal('${q.id}')" title="Modifier">✎</button>
+          <button class="btn-icon" onclick="askDelete('quotes','${q.id}')" title="Supprimer">✕</button>
+        </div>
+      </div>
+      <div class="card-meta">${q.book_id ? `📖 ${bookName(q.book_id)}` : ''}${q.page ? ` · p.${q.page}` : ''}${q.book_id || q.page ? '' : 'Sans source'} · ${fmtDate(q.created_at)}</div>
+      ${q.note ? `<div class="note">${q.note}</div>` : ''}
+      ${q.tags && q.tags.length ? `<div class="tags">${tagsHtml(q.tags)}</div>` : ''}
+    </div>`).join('');
+}
+
+function openQuoteModal(id) {
+  const q = id ? quotes.find(q => q.id === id) : null;
+  document.getElementById('quote-modal-title').textContent = q ? 'Modifier la citation' : 'Nouvelle citation';
+  document.getElementById('quote-id').value = q ? q.id : '';
+  document.getElementById('q-text').value = q ? q.text : '';
+  document.getElementById('q-page').value = q ? (q.page || '') : '';
+  document.getElementById('q-tags').value = q ? (q.tags||[]).join(', ') : '';
+  document.getElementById('q-note').value = q ? (q.note || '') : '';
+  populateBookSelects();
+  document.getElementById('q-book').value = q ? (q.book_id || '') : '';
+  document.getElementById('quote-modal').classList.add('open');
+}
+
+function saveQuote() {
+  const text = document.getElementById('q-text').value.trim();
+  if (!text) { alert('La citation ne peut pas être vide.'); return; }
+  const id = document.getElementById('quote-id').value;
+  const data = {
+    text, page: document.getElementById('q-page').value || null,
+    book_id: document.getElementById('q-book').value || null,
+    tags: parseTags(document.getElementById('q-tags').value),
+    note: document.getElementById('q-note').value.trim() || null,
+  };
+  if (id) { const i = quotes.findIndex(q => q.id === id); Object.assign(quotes[i], data); }
+  else { quotes.push({ id: uid(), is_favorite: false, created_at: Date.now(), ...data }); }
+  persist(); closeModal('quote-modal'); renderQuotes();
+}
+
+// ── VOCAB ──────────────────────────────────────────────────────────────────────
+function renderVocab() {
+  const search = document.getElementById('vocab-search').value.toLowerCase();
+  let list = vocab.filter(v => v.word.toLowerCase().includes(search) || v.definition.toLowerCase().includes(search) || (v.tags||[]).some(t => t.toLowerCase().includes(search)));
+  list = [...list].sort((a,b) => a.word.localeCompare(b.word));
+  document.getElementById('vocab-count').textContent = `${vocab.length} définition${vocab.length !== 1 ? 's' : ''}`;
+  const el = document.getElementById('vocab-list');
+  if (!list.length) { el.innerHTML = `<div class="empty"><div class="empty-icon">📚</div><p>${vocab.length ? 'Aucun résultat' : 'Aucun mot encore — ajoutes-en un !'}</p></div>`; return; }
+  // group by first letter
+  const groups = {};
+  list.forEach(v => { const l = v.word[0].toUpperCase(); if (!groups[l]) groups[l] = []; groups[l].push(v); });
+  el.innerHTML = Object.keys(groups).sort().map(letter => `
+    <div class="alpha-group">
+      <div class="alpha-letter">${letter}</div>
+      ${groups[letter].map(v => `
+        <div class="card">
+          <div class="card-header">
+            <div><div class="word-title">${v.word}</div>${v.etymology ? `<div class="etymology">${v.etymology}</div>` : ''}</div>
+            <div class="card-actions">
+              <button class="btn-icon ${v.is_favorite ? 'fav' : ''}" onclick="toggleFav('vocab','${v.id}')" title="Favori">♥</button>
+              <button class="btn-icon" onclick="openVocabModal('${v.id}')" title="Modifier">✎</button>
+              <button class="btn-icon" onclick="askDelete('vocab','${v.id}')" title="Supprimer">✕</button>
+            </div>
+          </div>
+          <div class="definition">${v.definition}</div>
+          ${v.example ? `<div class="example">${v.example}</div>` : ''}
+          ${v.book_id ? `<div class="card-meta" style="margin-top:8px">📖 ${bookName(v.book_id)}</div>` : ''}
+          ${v.tags && v.tags.length ? `<div class="tags">${tagsHtml(v.tags)}</div>` : ''}
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+function openVocabModal(id) {
+  const v = id ? vocab.find(v => v.id === id) : null;
+  document.getElementById('vocab-modal-title').textContent = v ? 'Modifier le mot' : 'Nouveau mot';
+  document.getElementById('vocab-id').value = v ? v.id : '';
+  document.getElementById('v-word').value = v ? v.word : '';
+  document.getElementById('v-def').value = v ? v.definition : '';
+  document.getElementById('v-etym').value = v ? (v.etymology || '') : '';
+  document.getElementById('v-example').value = v ? (v.example || '') : '';
+  document.getElementById('v-tags').value = v ? (v.tags||[]).join(', ') : '';
+  populateBookSelects();
+  document.getElementById('v-book').value = v ? (v.book_id || '') : '';
+  document.getElementById('vocab-modal').classList.add('open');
+}
+
+function saveVocab() {
+  const word = document.getElementById('v-word').value.trim();
+  const definition = document.getElementById('v-def').value.trim();
+  if (!word || !definition) { alert('Le mot et la définition sont obligatoires.'); return; }
+  const id = document.getElementById('vocab-id').value;
+  const data = {
+    word, definition,
+    etymology: document.getElementById('v-etym').value.trim() || null,
+    example: document.getElementById('v-example').value.trim() || null,
+    tags: parseTags(document.getElementById('v-tags').value),
+    book_id: document.getElementById('v-book').value || null,
+  };
+  if (id) { const i = vocab.findIndex(v => v.id === id); Object.assign(vocab[i], data); }
+  else { vocab.push({ id: uid(), is_favorite: false, created_at: Date.now(), ...data }); }
+  persist(); closeModal('vocab-modal'); renderVocab();
+}
+
+// ── BOOKS ─────────────────────────────────────────────────────────────────────
+let selectedColor = COLORS[0];
+
+function renderBooks() {
+  document.getElementById('books-count').textContent = `${books.length} livre${books.length !== 1 ? 's' : ''}`;
+  const el = document.getElementById('books-grid');
+  if (!books.length) { el.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📖</div><p>Aucun livre encore — ajoutes-en un !</p></div>`; return; }
+  el.innerHTML = books.map(b => `
+    <div class="book-card">
+      <div class="book-cover" style="background:${b.cover_color}">
+        <div class="book-cover-title">${b.title}</div>
+      </div>
+      <div class="book-info">
+        <div class="book-author">${b.author || 'Auteur inconnu'}</div>
+        <div class="book-cat">${b.category}</div>
+        <div class="book-actions">
+          <button class="btn-icon" onclick="openBookModal('${b.id}')" title="Modifier">✎</button>
+          <button class="btn-icon" onclick="askDelete('books','${b.id}')" title="Supprimer">✕</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function openBookModal(id) {
+  const b = id ? books.find(b => b.id === id) : null;
+  document.getElementById('book-modal-title').textContent = b ? 'Modifier le livre' : 'Nouveau livre';
+  document.getElementById('book-id').value = b ? b.id : '';
+  document.getElementById('b-title').value = b ? b.title : '';
+  document.getElementById('b-author').value = b ? (b.author || '') : '';
+  document.getElementById('b-cat').value = b ? b.category : 'général';
+  selectedColor = b ? b.cover_color : COLORS[0];
+  renderColorPicker();
+  document.getElementById('book-modal').classList.add('open');
+}
+
+function renderColorPicker() {
+  document.getElementById('color-picker').innerHTML = COLORS.map(c => `
+    <div class="color-swatch ${c === selectedColor ? 'selected' : ''}" style="background:${c}" onclick="selectColor('${c}')"></div>`).join('');
+}
+function selectColor(c) { selectedColor = c; renderColorPicker(); }
+
+function saveBook() {
+  const title = document.getElementById('b-title').value.trim();
+  if (!title) { alert('Le titre est obligatoire.'); return; }
+  const id = document.getElementById('book-id').value;
+  const data = { title, author: document.getElementById('b-author').value.trim() || null, category: document.getElementById('b-cat').value, cover_color: selectedColor };
+  if (id) { const i = books.findIndex(b => b.id === id); Object.assign(books[i], data); }
+  else { books.push({ id: uid(), created_at: Date.now(), ...data }); }
+  persist(); closeModal('book-modal'); renderBooks(); populateBookSelects();
+}
+
+// ── FAVORITES ─────────────────────────────────────────────────────────────────
+function toggleFav(type, id) {
+  const arr = type === 'quotes' ? quotes : vocab;
+  const item = arr.find(x => x.id === id);
+  if (item) item.is_favorite = !item.is_favorite;
+  persist();
+  if (type === 'quotes') renderQuotes();
+  else renderVocab();
+}
+
+function switchFavTab(tab, btn) {
+  currentFavTab = tab;
+  document.querySelectorAll('#page-favorites .tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderFavList();
+}
+
+function dailyPick() {
+  const all = [...quotes.map(q => ({...q,type:'quote'})), ...vocab.map(v => ({...v,type:'vocab'}))];
+  if (!all.length) return null;
+  const day = Math.floor(Date.now() / 86400000);
+  return all[day % all.length];
+}
+
+function renderFavorites() {
+  const pick = dailyPick();
+  const banner = document.getElementById('daily-banner');
+  if (pick) {
+    const text = pick.type === 'quote' ? `"${pick.text}"` : pick.word;
+    const sub = pick.type === 'quote' ? (pick.book_id ? bookName(pick.book_id) : 'Citation') : pick.definition.slice(0, 80) + (pick.definition.length > 80 ? '…' : '');
+    banner.innerHTML = `
+      <div class="daily-card">
+        <div class="daily-label">✨ Inspiration du jour</div>
+        <div class="daily-text">${text}</div>
+        <div class="daily-meta">${sub}</div>
+        <div class="daily-actions">
+          <button class="btn btn-white" onclick="randomPick()">🎲 Aléatoire</button>
+        </div>
+      </div>`;
+  } else {
+    banner.innerHTML = `<div class="daily-card"><div class="daily-label">✨ Inspiration du jour</div><div class="daily-text" style="font-style:normal;font-size:16px">Ajoute des citations ou des mots pour voir une inspiration quotidienne !</div></div>`;
+  }
+  renderFavList();
+}
+
+function renderFavList() {
+  const el = document.getElementById('fav-list');
+  if (currentFavTab === 'quotes') {
+    const favs = quotes.filter(q => q.is_favorite).sort((a,b) => b.created_at - a.created_at);
+    if (!favs.length) { el.innerHTML = `<div class="empty"><div class="empty-icon">♥</div><p>Aucune citation favorite encore</p></div>`; return; }
+    el.innerHTML = favs.map(q => `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">"${q.text}"</div>
+          <button class="btn-icon fav" onclick="toggleFav('quotes','${q.id}');renderFavorites()">♥</button>
+        </div>
+        <div class="card-meta">${q.book_id ? `📖 ${bookName(q.book_id)}` : 'Sans source'}</div>
+        ${q.tags && q.tags.length ? `<div class="tags">${tagsHtml(q.tags)}</div>` : ''}
+      </div>`).join('');
+  } else {
+    const favs = vocab.filter(v => v.is_favorite).sort((a,b) => a.word.localeCompare(b.word));
+    if (!favs.length) { el.innerHTML = `<div class="empty"><div class="empty-icon">♥</div><p>Aucun mot favori encore</p></div>`; return; }
+    el.innerHTML = favs.map(v => `
+      <div class="card">
+        <div class="card-header">
+          <div><div class="word-title">${v.word}</div>${v.etymology ? `<div class="etymology">${v.etymology}</div>` : ''}</div>
+          <button class="btn-icon fav" onclick="toggleFav('vocab','${v.id}');renderFavorites()">♥</button>
+        </div>
+        <div class="definition">${v.definition}</div>
+        ${v.tags && v.tags.length ? `<div class="tags">${tagsHtml(v.tags)}</div>` : ''}
+      </div>`).join('');
+  }
+}
+
+let randomCard = null;
+function randomPick() {
+  const all = [...quotes.map(q => ({...q,type:'quote'})), ...vocab.map(v => ({...v,type:'vocab'}))];
+  if (!all.length) return;
+  randomCard = all[Math.floor(Math.random() * all.length)];
+  const text = randomCard.type === 'quote' ? `"${randomCard.text}"` : randomCard.word;
+  const sub = randomCard.type === 'quote' ? (randomCard.book_id ? bookName(randomCard.book_id) : 'Citation') : randomCard.definition.slice(0,80) + '…';
+  document.getElementById('daily-banner').innerHTML = `
+    <div class="daily-card" style="background:linear-gradient(135deg,#1E3A5F,#2a5a8f)">
+      <div class="daily-label">🎲 Sélection aléatoire</div>
+      <div class="daily-text">${text}</div>
+      <div class="daily-meta">${sub}</div>
+      <div class="daily-actions">
+        <button class="btn btn-white" onclick="randomPick()">🎲 Encore</button>
+      </div>
+    </div>`;
+}
+
+// ── DELETE ────────────────────────────────────────────────────────────────────
+function askDelete(type, id) { deleteTarget = {type,id}; document.getElementById('confirm-modal').classList.add('open'); }
+function closeConfirm() { deleteTarget = null; document.getElementById('confirm-modal').classList.remove('open'); }
+function confirmDelete() {
+  if (!deleteTarget) return;
+  const {type, id} = deleteTarget;
+  if (type === 'quotes') quotes = quotes.filter(q => q.id !== id);
+  else if (type === 'vocab') vocab = vocab.filter(v => v.id !== id);
+  else if (type === 'books') { books = books.filter(b => b.id !== id); quotes.forEach(q => { if(q.book_id === id) q.book_id = null; }); vocab.forEach(v => { if(v.book_id === id) v.book_id = null; }); }
+  persist(); closeConfirm();
+  if (type === 'quotes') renderQuotes();
+  else if (type === 'vocab') renderVocab();
+  else renderBooks();
+}
+
+// ── MODALS ────────────────────────────────────────────────────────────────────
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); }));
+
+// ── SETTINGS / NOTIFICATIONS ──────────────────────────────────────────────────
+function initSettings() {
+  const statusEl = document.getElementById('notif-status');
+  const permBtn = document.getElementById('notif-perm-btn');
+  if (!('Notification' in window)) {
+    statusEl.textContent = 'Non supporté par ce navigateur';
+    permBtn.disabled = true;
+    return;
+  }
+  const perm = Notification.permission;
+  if (perm === 'granted') { statusEl.textContent = 'Autorisées ✓'; permBtn.textContent = 'Autorisées'; permBtn.disabled = true; }
+  else if (perm === 'denied') { statusEl.textContent = 'Refusées — modifie les paramètres du navigateur'; permBtn.disabled = true; }
+  else { statusEl.textContent = 'En attente d\'autorisation'; permBtn.textContent = 'Activer'; }
+
+  // Fill hour select
+  const sel = document.getElementById('notif-hour');
+  sel.innerHTML = '';
+  for (let h = 7; h <= 21; h++) sel.innerHTML += `<option value="${h}">${h.toString().padStart(2,'0')}:00</option>`;
+  sel.value = localStorage.getItem('lectio_hour') || '8';
+  document.getElementById('notif-enabled').checked = localStorage.getItem('lectio_enabled') === 'true';
+}
+
+function requestNotifPerm() {
+  if (!('Notification' in window)) return;
+  Notification.requestPermission().then(p => {
+    initSettings();
+    if (p === 'granted') scheduleNotifCheck();
+  });
+}
+
+function saveNotifSettings() {
+  localStorage.setItem('lectio_hour', document.getElementById('notif-hour').value);
+  localStorage.setItem('lectio_enabled', document.getElementById('notif-enabled').checked);
+  scheduleNotifCheck();
+}
+
+function testNotif() {
+  if (Notification.permission !== 'granted') { alert('Active d\'abord les notifications.'); return; }
+  const pick = dailyPick();
+  if (!pick) { alert('Ajoute d\'abord des citations ou des mots !'); return; }
+  const title = pick.type === 'quote' ? '💬 Citation du jour' : '📚 Mot du jour';
+  const body = pick.type === 'quote' ? pick.text : `${pick.word} — ${pick.definition}`;
+  new Notification(title, { body, icon: '/favicon.svg' });
+}
+
+function scheduleNotifCheck() {
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'SCHEDULE',
+      hour: parseInt(localStorage.getItem('lectio_hour') || '8'),
+      enabled: localStorage.getItem('lectio_enabled') === 'true'
+    });
+  }
+}
+
+// ── EXPORT / IMPORT ───────────────────────────────────────────────────────────
+function exportData() {
+  const data = { books, quotes, vocab, exported_at: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'lectio-export.json'; a.click();
+}
+
+function importData(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.books) books = data.books;
+      if (data.quotes) quotes = data.quotes;
+      if (data.vocab) vocab = data.vocab;
+      persist();
+      alert(`Import réussi ! ${quotes.length} citations, ${vocab.length} mots, ${books.length} livres.`);
+      navigate('quotes');
+    } catch { alert('Fichier invalide.'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ── SERVICE WORKER ────────────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(() => {
+    scheduleNotifCheck();
+  });
+  // Respond to GET_DAILY requests from service worker
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data && e.data.type === 'GET_DAILY') {
+      const pick = dailyPick();
+      e.ports[0].postMessage(pick);
+    }
+  });
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+populateBookSelects();
+renderQuotes();
+</script>
+</body>
+</html>

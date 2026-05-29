@@ -1,0 +1,15 @@
+{
+  "name": "Lectio — Citations & Vocabulaire",
+  "short_name": "Lectio",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f6f4f0",
+  "theme_color": "#7C2D3E",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ]
+}
