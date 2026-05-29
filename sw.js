@@ -57,8 +57,8 @@ async function sendNotif() {
 
   self.registration.showNotification(title, {
     body: text,
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    icon: '/icon.jpg',
+    badge: '/icon.jpg',
     tag: 'lectio-daily',
     renotify: true,
   });
