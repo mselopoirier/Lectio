@@ -719,29 +719,51 @@ document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', 
 function initSettings() {
   const statusEl = document.getElementById('notif-status');
   const permBtn = document.getElementById('notif-perm-btn');
-  if (!('Notification' in window)) {
-    statusEl.textContent = 'Non supporté par ce navigateur';
-    permBtn.disabled = true;
-    return;
-  }
-  const perm = Notification.permission;
-  if (perm === 'granted') { statusEl.textContent = 'Autorisées ✓'; permBtn.textContent = 'Autorisées'; permBtn.disabled = true; }
-  else if (perm === 'denied') { statusEl.textContent = 'Refusées — modifie les paramètres du navigateur'; permBtn.disabled = true; }
-  else { statusEl.textContent = 'En attente d\'autorisation'; permBtn.textContent = 'Activer'; }
 
-  // Fill hour select
+  if (!('Notification' in window)) {
+    statusEl.textContent = 'Non supporté — essaie Chrome sur Android';
+    permBtn.disabled = true;
+  } else {
+    const perm = Notification.permission;
+    if (perm === 'granted') {
+      statusEl.textContent = 'Autorisées ✓';
+      permBtn.textContent = 'Autorisées ✓';
+      permBtn.disabled = true;
+    } else if (perm === 'denied') {
+      statusEl.textContent = 'Bloquées — autorise dans les réglages du navigateur';
+      permBtn.textContent = 'Bloquées';
+      permBtn.disabled = true;
+    } else {
+      statusEl.textContent = 'Pas encore autorisées';
+      permBtn.textContent = 'Autoriser';
+      permBtn.disabled = false;
+    }
+  }
+
   const sel = document.getElementById('notif-hour');
   sel.innerHTML = '';
-  for (let h = 7; h <= 21; h++) sel.innerHTML += `<option value="${h}">${h.toString().padStart(2,'0')}:00</option>`;
+  for (let h = 7; h <= 21; h++) {
+    const opt = document.createElement('option');
+    opt.value = h;
+    opt.textContent = String(h).padStart(2,'0') + ':00';
+    sel.appendChild(opt);
+  }
   sel.value = localStorage.getItem('lectio_hour') || '8';
   document.getElementById('notif-enabled').checked = localStorage.getItem('lectio_enabled') === 'true';
 }
 
 function requestNotifPerm() {
-  if (!('Notification' in window)) return;
-  Notification.requestPermission().then(p => {
+  if (!('Notification' in window)) {
+    alert('Ton navigateur ne supporte pas les notifications.\nEssaie Chrome sur Android.');
+    return;
+  }
+  Notification.requestPermission().then(function(p) {
     initSettings();
-    if (p === 'granted') scheduleNotifCheck();
+    if (p === 'granted') {
+      alert('Notifications autorisées ! Clique sur Tester pour essayer.');
+    } else if (p === 'denied') {
+      alert('Bloquées. Va dans Réglages du navigateur > Notifications pour autoriser ce site.');
+    }
   });
 }
 
@@ -752,14 +774,46 @@ function saveNotifSettings() {
 }
 
 function testNotif() {
-  if (Notification.permission !== 'granted') { alert('Active d\'abord les notifications.'); return; }
-  const pick = dailyPick();
-  if (!pick) { alert('Ajoute d\'abord des citations ou des mots !'); return; }
-  const title = pick.type === 'quote' ? '💬 Citation du jour' : '📚 Mot du jour';
-  const body = pick.type === 'quote' ? pick.text : `${pick.word} — ${pick.definition}`;
-  new Notification(title, { body, icon: '/favicon.svg' });
+  if (!('Notification' in window) && !('serviceWorker' in navigator)) {
+    alert('Notifications non supportées par ce navigateur.');
+    return;
+  }
+  var perm = ('Notification' in window) ? Notification.permission : 'unknown';
+  if (perm === 'denied') {
+    alert('Notifications bloquées.\nVa dans Réglages > Applications > Samsung Internet (ou Chrome) > Notifications et active-les pour ce site.');
+    return;
+  }
+  function fireNotif() {
+    var pick = dailyPick();
+    if (!pick) { alert('Ajoute d\'abord une citation ou un mot !'); return; }
+    var title = pick.type === 'quote' ? 'Citation du jour' : 'Mot du jour';
+    var body  = pick.type === 'quote' ? pick.text : pick.word + ' — ' + pick.definition;
+    var opts  = { body: body, icon: 'icon-512.png', tag: 'lectio-test', renotify: true };
+    // Méthode 1 : via service worker (meilleure compatibilité Samsung Internet)
+    if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+      navigator.serviceWorker.ready.then(function(reg) {
+        reg.showNotification(title, opts).catch(function(err) {
+          // Méthode 2 : notification directe en fallback
+          try { new Notification(title, opts); } catch(e) { alert('Erreur : ' + e.message); }
+        });
+      }).catch(function() {
+        try { new Notification(title, opts); } catch(e) { alert('Erreur : ' + e.message); }
+      });
+    } else {
+      // Méthode 2 : notification directe
+      try { new Notification(title, opts); } catch(e) { alert('Erreur : ' + e.message); }
+    }
+  }
+  if (perm === 'granted') {
+    fireNotif();
+  } else {
+    Notification.requestPermission().then(function(p) {
+      initSettings();
+      if (p === 'granted') fireNotif();
+      else alert('Permission refusée. Active les notifications dans les réglages du navigateur.');
+    });
+  }
 }
-
 function scheduleNotifCheck() {
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
     navigator.serviceWorker.controller.postMessage({
@@ -770,7 +824,6 @@ function scheduleNotifCheck() {
   }
 }
 
-// ── EXPORT / IMPORT ───────────────────────────────────────────────────────────
 function exportData() {
   const data = { books, quotes, vocab, exported_at: new Date().toISOString() };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
