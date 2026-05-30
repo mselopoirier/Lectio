@@ -1,4 +1,4 @@
-// Lectio Service Worker — notifications quotidiennes (sans backend)
+// Lectio Service Worker — notifications quotidiennes
 let scheduledHour = 8;
 let enabled = false;
 let checkInterval = null;
@@ -12,53 +12,60 @@ self.addEventListener('message', e => {
     enabled = e.data.enabled || false;
     startScheduler();
   }
-  if (e.data.type === 'TEST') sendNotif();
+  if (e.data.type === 'TEST') {
+    sendNotifFromClients();
+  }
+  if (e.data.type === 'GET_DAILY') {
+    // handled by page
+  }
 });
 
 function startScheduler() {
   if (checkInterval) clearInterval(checkInterval);
   if (!enabled) return;
-  // Check every minute if it's time
   checkInterval = setInterval(() => {
     const now = new Date();
     if (now.getHours() === scheduledHour && now.getMinutes() === 0) {
       const today = now.toDateString();
-      const lastSent = self.__lastSent;
-      if (lastSent !== today) {
+      if (self.__lastSent !== today) {
         self.__lastSent = today;
-        sendNotif();
+        sendNotifFromClients();
       }
     }
   }, 60000);
 }
 
-async function sendNotif() {
-  // Read data from all clients via localStorage — fallback to generic message
+async function sendNotifFromClients() {
   const allClients = await self.clients.matchAll({ type: 'window' });
-  let text = null;
-  let title = '📖 Lectio';
 
+  let pick = null;
   for (const client of allClients) {
-    // Ask the client for a daily pick
-    const pick = await new Promise(resolve => {
+    pick = await new Promise(resolve => {
       const ch = new MessageChannel();
       ch.port1.onmessage = e => resolve(e.data);
       client.postMessage({ type: 'GET_DAILY' }, [ch.port2]);
-      setTimeout(() => resolve(null), 1000);
+      setTimeout(() => resolve(null), 1500);
     });
-    if (pick) {
-      if (pick.type === 'quote') { title = '💬 Citation du jour'; text = pick.text; }
-      else { title = '📚 Mot du jour'; text = `${pick.word} — ${pick.definition}`; }
-      break;
+    if (pick) break;
+  }
+
+  let title = '📖 Lectio';
+  let body = 'Ouvre Lectio pour ton inspiration du jour !';
+
+  if (pick) {
+    if (pick.type === 'quote') {
+      title = '💬 Citation du jour';
+      body = pick.text;
+    } else {
+      title = '📚 Mot du jour';
+      body = pick.word + ' — ' + pick.definition;
     }
   }
 
-  if (!text) text = 'Ouvre Lectio pour découvrir ton inspiration du jour !';
-
-  self.registration.showNotification(title, {
-    body: text,
-    icon: '/icon-512.png',
-    badge: '/icon-192.png',
+  await self.registration.showNotification(title, {
+    body,
+    icon: 'icon-512.png',
+    badge: 'icon-192.png',
     tag: 'lectio-daily',
     renotify: true,
   });
@@ -66,8 +73,10 @@ async function sendNotif() {
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  e.waitUntil(self.clients.matchAll({ type: 'window' }).then(clients => {
-    if (clients.length) return clients[0].focus();
-    return self.clients.openWindow('/');
-  }));
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window' }).then(clients => {
+      if (clients.length) return clients[0].focus();
+      return self.clients.openWindow('./');
+    })
+  );
 });
